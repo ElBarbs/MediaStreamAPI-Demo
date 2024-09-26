@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>MediaStream API Demo</title>
+
+    <link rel="stylesheet" href="style.css" />
+    <script src="script.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1>MediaStream API Demo</h1>
+    </header>
+    <main>
+      <div id="buttons">
+        <button id="btnStart">START RECORDING</button>
+        <button id="btnStop">STOP RECORDING</button>
+        <button id="btnSnapshot">TAKE SNAPSHOT</button>
+      </div>
+      <div id="videos">
+        <video id="cameraVideo"></video>
+        <video id="recordedVideo" controls></video>
+      </div>
+      <canvas id="snapshotCanvas"></canvas>
+    </main>
+  </body>
+</html>
