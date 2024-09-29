@@ -1,103 +1,192 @@
-// Define the constraints for the video stream.
-let constraintObj = {
+// Define the constraints for the audio and video streams.
+const constraints = {
   audio: true,
   video: {
     facingMode: "user",
     width: { min: 640, ideal: 1280, max: 1920 },
     height: { min: 480, ideal: 720, max: 1080 },
+    frameRate: { min: 24, ideal: 30, max: 60 },
   },
 };
 
 // List all the available devices.
-navigator.mediaDevices
-  .enumerateDevices()
-  .then((devices) => {
-    devices.forEach((device) => {
-      console.log(device.kind.toUpperCase(), device.label);
+function listDevices() {
+  navigator.mediaDevices
+    .enumerateDevices()
+    .then((devices) => {
+      devices.forEach((device) => {
+        const elem = document.createElement("li");
+        elem.textContent = `${device.kind.toUpperCase()}: ${device.label}`;
+        document.getElementById("detectedDevices").appendChild(elem);
+      });
+    })
+    .catch((err) => {
+      console.log(err.name, err.message);
     });
-  })
-  .catch((err) => {
-    console.log(err.name, err.message);
+}
+
+// Log audio and video tracks.
+function logTracks(mediaStream) {
+  mediaStream.getVideoTracks().forEach((track) => {
+    const elem = document.createElement("li");
+    elem.textContent = `Video Source: ${track.label}`;
+    document.getElementById("connectedDevices").appendChild(elem);
   });
 
-// Get the user's permission to access the webcam and microphone.
-// If the user grants permission, the video stream will be displayed in the video element.
-navigator.mediaDevices
-  .getUserMedia(constraintObj)
-  .then((stream) => {
-    // Get the buttons elements.
-    let btnStart = document.getElementById("btnStart");
-    let btnStop = document.getElementById("btnStop");
-    let btnSnapshot = document.getElementById("btnSnapshot");
+  mediaStream.getAudioTracks().forEach((track) => {
+    const elem = document.createElement("li");
+    elem.textContent = `Audio Source: ${track.label}`;
+    document.getElementById("connectedDevices").appendChild(elem);
+  });
+}
 
-    // Get the video elements.
-    let vid = document.getElementById("cameraVideo");
-    let recordedVid = document.getElementById("recordedVideo");
+// Setup the video stream.
+function setupVideoStream(mediaStream) {
+  const vid = document.getElementById("cameraVideo");
+  vid.srcObject = mediaStream;
+  vid.onloadedmetadata = () => vid.play();
+}
 
-    // Get the canvas element.
-    let canvas = document.getElementById("snapshotCanvas");
-    let context = canvas.getContext("2d");
+// Setup the media recorder.
+function setupMediaRecorder(mediaStream) {
+  const mediaRecorder = new MediaRecorder(mediaStream);
+  let chunks = [];
 
-    // Connect the video stream to the video element.
-    vid.srcObject = stream;
+  mediaRecorder.ondataavailable = (ev) => {
+    if (ev.data && ev.data.size > 0) {
+      chunks.push(ev.data);
+    }
+  };
 
-    // Once the video stream is loaded, play the video.
-    vid.onloadedmetadata = function () {
-      vid.play();
-    };
+  mediaRecorder.onstop = () => {
+    const blob = new Blob(chunks, { type: "video/webm;" });
+    chunks = [];
+    const videoURL = window.URL.createObjectURL(blob);
+    document.getElementById("recordedVideo").src = videoURL;
+  };
 
-    // Create a new MediaRecorder object, which will be used to record the video.
-    let mediaRecorder = new MediaRecorder(stream);
-    let chunks = [];
+  return mediaRecorder;
+}
 
-    // Setup the start and stop buttons.
-    btnStart.addEventListener("click", () => {
-      mediaRecorder.start();
-    });
-    btnStop.addEventListener("click", () => {
-      mediaRecorder.stop();
-    });
+// Setup the buttons.
+function setupButtons(mediaRecorder) {
+  const btnStart = document.getElementById("btnStart");
+  const btnStop = document.getElementById("btnStop");
+  const btnSnapshot = document.getElementById("btnSnapshot");
+  const btnFilter = document.getElementById("btnFilter");
+  const canvas = document.getElementById("snapshotCanvas");
+  const context = canvas.getContext("2d");
+  const vid = document.getElementById("cameraVideo");
 
-    // Setup the snapshot button.
-    btnSnapshot.addEventListener("click", () => {
-      // Display the canvas element.
-      canvas.style.display = "block";
+  btnStart.addEventListener("click", () => mediaRecorder.start());
+  btnStop.addEventListener("click", () => mediaRecorder.stop());
 
-      // Set the canvas dimensions to match the video dimensions.
-      canvas.width = vid.videoWidth;
-      canvas.height = vid.videoHeight;
+  btnSnapshot.addEventListener("click", () => {
+    canvas.width = vid.videoWidth;
+    canvas.height = vid.videoHeight;
+    context.drawImage(vid, 0, 0, canvas.width, canvas.height);
 
-      // Draw the video frame on the canvas.
-      context.drawImage(vid, 0, 0, canvas.width, canvas.height);
-    });
+    const dataURL = canvas.toDataURL("image/png");
 
-    canvas.addEventListener("click", () => {
-      // Get the data URL of the canvas.
-      let dataURL = canvas.toDataURL("image/png");
+    const gallery = document.getElementById("snapshotGallery");
+    const img = document.createElement("img");
+    img.src = dataURL;
+    img.className = "snapshot";
 
-      // Create a new link element and click it to download the image.
-      let link = document.createElement("a");
-      link.href = dataURL;
-      link.download = "MediaStreamAPI-Demo-Snapshot.png";
-      link.click();
-    });
+    // Add the new snapshot to the end of the gallery.
+    gallery.appendChild(img);
 
-    // When data is available, add it to the chunks array.
-    mediaRecorder.ondataavailable = function (ev) {
-      if (ev.data && ev.data.size > 0) {
-        chunks.push(ev.data);
+    // Remove excess snapshots if the gallery exceeds 5 items.
+    if (gallery.childElementCount > 5) {
+      gallery.removeChild(gallery.firstChild);
+    }
+  });
+
+  canvas.addEventListener("click", () => {
+    const dataURL = canvas.toDataURL("image/png");
+    const link = document.createElement("a");
+    link.href = dataURL;
+    link.download = "MediaStreamAPI-Demo-Snapshot.png";
+    link.click();
+  });
+}
+
+// Audio Visualizer
+// Taken from: https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Visualizations_with_Web_Audio_API
+// and modified to fit the current example.
+function setupAudioVisualizer(mediaStream) {
+  const audioContext = new window.AudioContext();
+
+  const source = audioContext.createMediaStreamSource(mediaStream);
+
+  const analyser = audioContext.createAnalyser();
+  analyser.fftSize = 2048;
+  const bufferLength = analyser.frequencyBinCount;
+  const dataArray = new Uint8Array(bufferLength);
+
+  source.connect(analyser);
+
+  const canvas = document.getElementById("audioVisualizer");
+  const canvasCtx = canvas.getContext("2d");
+
+  function draw() {
+    requestAnimationFrame(draw);
+
+    analyser.getByteTimeDomainData(dataArray);
+
+    // Clear the canvas.
+    canvasCtx.fillStyle = "rgb(200, 200, 200)";
+    canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Set the line style.
+    canvasCtx.lineWidth = 2;
+    canvasCtx.strokeStyle = "rgb(0, 0, 0)";
+
+    // Begin drawing the waveform.
+    canvasCtx.beginPath();
+
+    const sliceWidth = canvas.width / bufferLength;
+    let x = 0;
+
+    for (let i = 0; i < bufferLength; i++) {
+      const v = dataArray[i] / 128.0;
+      const y = (v * canvas.height) / 2;
+
+      if (i === 0) {
+        canvasCtx.moveTo(x, y);
+      } else {
+        canvasCtx.lineTo(x, y);
       }
-    };
 
-    // When the recording stops, create a new Blob object and set the video element's src to the URL of the Blob.
-    mediaRecorder.onstop = () => {
-      let blob = new Blob(chunks, { type: "video/webm;" });
-      chunks = [];
+      x += sliceWidth;
+    }
 
-      let videoURL = window.URL.createObjectURL(blob);
-      recordedVid.src = videoURL;
-    };
-  })
-  .catch((err) => {
-    console.log(err.name, err.message);
-  });
+    // Draw the line to the end of the canvas
+    canvasCtx.lineTo(canvas.width, canvas.height / 2);
+    canvasCtx.stroke();
+  }
+
+  draw();
+}
+
+// Initialize the media stream.
+function initMediaStream() {
+  navigator.mediaDevices
+    .getUserMedia(constraints)
+    .then((mediaStream) => {
+      setupVideoStream(mediaStream);
+      logTracks(mediaStream);
+      const mediaRecorder = setupMediaRecorder(mediaStream);
+      setupButtons(mediaRecorder);
+
+      // Setup audio visualization.
+      setupAudioVisualizer(mediaStream);
+    })
+    .catch((err) => {
+      console.log(err.name, err.message);
+    });
+}
+
+// Execute the functions
+listDevices();
+initMediaStream();
