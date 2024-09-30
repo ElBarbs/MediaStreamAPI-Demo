@@ -44,6 +44,7 @@ function logTracks(mediaStream) {
 function setupVideoStream(mediaStream) {
   const vid = document.getElementById("cameraVideo");
   vid.srcObject = mediaStream;
+  // Play the video once the metadata is loaded.
   vid.onloadedmetadata = () => vid.play();
 }
 
@@ -58,10 +59,15 @@ function setupMediaRecorder(mediaStream) {
     }
   };
 
+  // When the recording stops.
   mediaRecorder.onstop = () => {
-    const blob = new Blob(chunks, { type: "video/webm;" });
+    // Create a new Blob from the recorded chunks.
+    const blob = new Blob(chunks, { type: "video/webm" });
+    // Clear the chunks array.
     chunks = [];
+    // Create a URL for the Blob.
     const videoURL = window.URL.createObjectURL(blob);
+    // Set the recorded video source.
     document.getElementById("recordedVideo").src = videoURL;
   };
 
@@ -73,7 +79,6 @@ function setupButtons(mediaRecorder) {
   const btnStart = document.getElementById("btnStart");
   const btnStop = document.getElementById("btnStop");
   const btnSnapshot = document.getElementById("btnSnapshot");
-  const btnFilter = document.getElementById("btnFilter");
   const canvas = document.getElementById("snapshotCanvas");
   const context = canvas.getContext("2d");
   const vid = document.getElementById("cameraVideo");
@@ -82,12 +87,15 @@ function setupButtons(mediaRecorder) {
   btnStop.addEventListener("click", () => mediaRecorder.stop());
 
   btnSnapshot.addEventListener("click", () => {
+    // Set the canvas dimensions to match the video stream.
     canvas.width = vid.videoWidth;
     canvas.height = vid.videoHeight;
     context.drawImage(vid, 0, 0, canvas.width, canvas.height);
 
-    const dataURL = canvas.toDataURL("image/png");
+    // Extract the image data URL.
+    const dataURL = canvas.toDataURL("image/webp");
 
+    // Create a new image element.
     const gallery = document.getElementById("snapshotGallery");
     const img = document.createElement("img");
     img.src = dataURL;
@@ -100,14 +108,6 @@ function setupButtons(mediaRecorder) {
     if (gallery.childElementCount > 5) {
       gallery.removeChild(gallery.firstChild);
     }
-  });
-
-  canvas.addEventListener("click", () => {
-    const dataURL = canvas.toDataURL("image/png");
-    const link = document.createElement("a");
-    link.href = dataURL;
-    link.download = "MediaStreamAPI-Demo-Snapshot.png";
-    link.click();
   });
 }
 
@@ -176,10 +176,9 @@ function initMediaStream() {
     .then((mediaStream) => {
       setupVideoStream(mediaStream);
       logTracks(mediaStream);
+
       const mediaRecorder = setupMediaRecorder(mediaStream);
       setupButtons(mediaRecorder);
-
-      // Setup audio visualization.
       setupAudioVisualizer(mediaStream);
     })
     .catch((err) => {
